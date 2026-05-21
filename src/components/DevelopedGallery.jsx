@@ -1,6 +1,15 @@
 ﻿import Reactions from './Reactions'
 
 export default function DevelopedGallery({ photos, revealed, onReact }) {
+  if (!revealed) {
+    return (
+      <div className="card stack">
+        <h2>Developed Gallery</h2>
+        <p className="muted">Everyone's photos unlock together at reveal time.</p>
+      </div>
+    )
+  }
+
   return (
     <div className="card stack">
       <h2>Everyone's Photos</h2>

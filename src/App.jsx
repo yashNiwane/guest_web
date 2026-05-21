@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import confetti from 'canvas-confetti'
 import JoinEvent from './components/JoinEvent'
 import CameraDashboard from './components/CameraDashboard'
 import FilmRoll from './components/FilmRoll'
+import RevealCountdown from './components/RevealCountdown'
 import DevelopedGallery from './components/DevelopedGallery'
 import { photoBucket, supabase, supabaseConfigError } from './config/supabase'
 import { useAnonymousAuth } from './hooks/useAnonymousAuth'
@@ -10,6 +12,7 @@ import {
   parseEventIdFromCurrentUrl,
   parseEventIdFromLink,
 } from './utils/event'
+import { compressImage } from './utils/compressImage'
 
 const DEFAULT_REVEAL_DELAY_MIN = 2
 const EMPTY_REACTIONS = { heart: 0, fire: 0, laugh: 0, wow: 0, crown: 0 }
@@ -18,6 +21,7 @@ export default function App() {
   const [joined, setJoined] = useState(false)
   const [eventId, setEventId] = useState('')
   const [eventName, setEventName] = useState('')
+  const [eventTheme, setEventTheme] = useState('minimal')
   const [nickname, setNickname] = useState('')
   const [revealAt, setRevealAt] = useState(
     () => new Date(Date.now() + DEFAULT_REVEAL_DELAY_MIN * 60_000),
@@ -41,6 +45,16 @@ export default function App() {
   const revealed = useMemo(() => now >= revealAt.getTime(), [now, revealAt])
 
   useEffect(() => {
+    if (!joined || !revealed) return
+    confetti({
+      particleCount: 90,
+      spread: 72,
+      origin: { y: 0.65 },
+    })
+    window.navigator.vibrate?.([80, 40, 120])
+  }, [joined, revealed])
+
+  useEffect(() => {
     if (joined && revealed && eventId) {
       loadPhotosForEvent(eventId, { shouldSignPhotos: true }).catch((err) => {
         console.error('Failed to refresh revealed photos', err)
@@ -61,7 +75,9 @@ export default function App() {
 
     const { data: photoRows, error: photoError } = await supabase
       .from('photos')
-      .select('id, caption, source_type, storage_path, user_id, created_at')
+      .select(
+        'id, caption, source_type, storage_path, user_id, nickname_denormalized, file_size_bytes, created_at',
+      )
       .eq('event_id', targetEventId)
       .order('created_at', { ascending: false })
 
@@ -80,11 +96,13 @@ export default function App() {
         sourceType: photo.source_type,
         caption: photo.caption || '',
         path: photo.storage_path,
+        fileSizeBytes: photo.file_size_bytes || 0,
         signedUrl: signedUrls.get(photo.storage_path) || '',
         nickname:
-          photo.user_id === currentUserId && currentNickname
+          photo.nickname_denormalized ||
+          (photo.user_id === currentUserId && currentNickname
             ? currentNickname
-            : `Guest ${photo.user_id.slice(0, 4)}`,
+            : `Guest ${photo.user_id.slice(0, 4)}`),
         reactions: reactionCounts.get(photo.id) || { ...EMPTY_REACTIONS },
       })),
     )
@@ -144,7 +162,7 @@ export default function App() {
 
       const { data: eventRow, error: eventError } = await supabase
         .from('events')
-        .select('id, name, reveal_time, photo_limit')
+        .select('id, name, theme, reveal_time, photo_limit, is_revealed')
         .eq('id', parsedEventId)
         .single()
 
@@ -161,12 +179,14 @@ export default function App() {
       if (guestError) throw guestError
 
       const nextRevealAt = new Date(eventRow.reveal_time)
-      const nextRevealed = Date.now() >= nextRevealAt.getTime()
+      const nextRevealed =
+        Boolean(eventRow.is_revealed) || Date.now() >= nextRevealAt.getTime()
 
       setEventId(parsedEventId)
       setEventName(eventRow.name || 'Untitled film')
+      setEventTheme(eventRow.theme || 'minimal')
       setNickname(nick)
-      setRevealAt(nextRevealAt)
+      setRevealAt(nextRevealed ? new Date(Date.now() - 1000) : nextRevealAt)
       setShotLimit(eventRow.photo_limit || 8)
       setJoined(true)
       loadPhotosForEvent(parsedEventId, {
@@ -184,12 +204,13 @@ export default function App() {
   }
 
   async function uploadOnePhoto({ file, sourceType, caption, session }) {
-    const path = fakeStoragePath(eventId, file.name)
+    const uploadFile = await compressImage(file)
+    const path = fakeStoragePath(eventId, uploadFile.name || file.name)
     const { error: uploadError } = await supabase.storage
       .from(photoBucket)
-      .upload(path, file, {
+      .upload(path, uploadFile, {
         cacheControl: '3600',
-        contentType: file.type,
+        contentType: uploadFile.type || file.type,
         upsert: false,
       })
     if (uploadError) {
@@ -202,6 +223,8 @@ export default function App() {
       storage_path: path,
       caption: caption || '',
       source_type: sourceType,
+      nickname_denormalized: nickname,
+      file_size_bytes: uploadFile.size,
     })
     if (insertError) {
       await supabase.storage.from(photoBucket).remove([path])
@@ -210,7 +233,7 @@ export default function App() {
   }
 
   async function handleAddPhoto({ files, file, sourceType, caption }) {
-    if (!supabase || !eventId) return
+    if (!supabase || !eventId || revealed) return
     const selectedFiles = files || (file ? [file] : [])
     const remainingShots = Math.max(shotLimit - photos.length, 0)
     const uploadFiles = selectedFiles.slice(0, remainingShots)
@@ -327,7 +350,7 @@ export default function App() {
   }
 
   return (
-    <main className="page stack">
+    <main className={`page stack theme-${eventTheme}`}>
       <h1>{headerText}</h1>
       <p className="muted">
         Guests join by QR, capture the day, and see the album after reveal.
@@ -361,8 +384,10 @@ export default function App() {
             takenShots={photos.length}
             onAddPhoto={handleAddPhoto}
             revealAt={revealAt}
-            disabled={busy}
+            disabled={busy || revealed}
           />
+
+          <RevealCountdown revealAt={revealAt} revealed={revealed} />
 
           <FilmRoll
             photos={photos}

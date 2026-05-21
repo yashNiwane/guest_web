@@ -35,6 +35,7 @@ export default function CameraDashboard({
       <p className="muted">Shots left: {remaining} / Reveal in: {revealText}</p>
       <p className="muted">
         Snap opens the camera for one shot. Choose Gallery can upload several photos at once.
+        Images are compressed before upload so slow networks feel less cursed.
       </p>
       <input
         className="input"

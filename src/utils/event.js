@@ -15,7 +15,16 @@ export function parseEventIdFromLink(link) {
 export function parseEventIdFromCurrentUrl() {
   try {
     const current = new URL(window.location.href)
-    return current.searchParams.get('event_id') || ''
+    const queryEventId = current.searchParams.get('event_id')
+    if (queryEventId) return queryEventId
+
+    const pathParts = current.pathname.split('/').filter(Boolean)
+    const eventIndex = pathParts.findIndex((part) => part === 'event')
+    if (eventIndex >= 0 && pathParts[eventIndex + 1]) {
+      return pathParts[eventIndex + 1]
+    }
+
+    return ''
   } catch {
     return ''
   }

@@ -19,14 +19,43 @@ body {
 }
 
 .page {
+  --accent: #f4f6fb;
+  --accent-ink: #090b10;
+  --card-glow: rgba(255, 255, 255, 0.08);
   max-width: 440px;
   margin: 0 auto;
   padding: 20px 16px 32px;
 }
 
+.theme-party {
+  --accent: #ffcf33;
+  --accent-ink: #1e1300;
+  --card-glow: rgba(255, 207, 51, 0.18);
+}
+
+.theme-wedding {
+  --accent: #ffd7e5;
+  --accent-ink: #32111c;
+  --card-glow: rgba(255, 215, 229, 0.2);
+}
+
+.theme-vacation {
+  --accent: #54e0c7;
+  --accent-ink: #05241f;
+  --card-glow: rgba(84, 224, 199, 0.18);
+}
+
+.theme-graduation {
+  --accent: #9db7ff;
+  --accent-ink: #0b173f;
+  --card-glow: rgba(157, 183, 255, 0.18);
+}
+
 .card {
   border: 1px solid #262d3c;
-  background: rgba(16, 20, 28, 0.88);
+  background:
+    radial-gradient(circle at top right, var(--card-glow), transparent 42%),
+    rgba(16, 20, 28, 0.88);
   border-radius: 18px;
   padding: 16px;
 }
@@ -69,8 +98,8 @@ h1 {
 }
 
 .button.primary {
-  background: #f4f6fb;
-  color: #090b10;
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
 .button.secondary {
@@ -99,6 +128,26 @@ h1 {
   overflow: hidden;
 }
 
+.photo.developing {
+  position: relative;
+}
+
+.photo.developing::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(110deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+  transform: translateX(-100%);
+  animation: shimmer 2.4s infinite;
+}
+
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
 .photo-img {
   width: 100%;
   aspect-ratio: 1;
@@ -111,6 +160,30 @@ h1 {
   aspect-ratio: 4 / 3;
 }
 
+.photo-img.private-preview {
+  filter: saturate(0.9) contrast(0.95);
+}
+
+.film-placeholder {
+  display: grid;
+  place-items: center;
+  min-height: 120px;
+  margin-top: 8px;
+  border-radius: 10px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.06), transparent),
+    #111827;
+  color: #7f8ba3;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tiny {
+  color: #738096;
+  font-size: 12px;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -118,7 +191,7 @@ h1 {
 }
 
 .chip {
-  border: 1px solid #35405a;
+  border: 1px solid color-mix(in srgb, var(--accent), #35405a 65%);
   border-radius: 999px;
   padding: 5px 10px;
   background: #101725;
@@ -181,4 +254,23 @@ h1 {
   color: #a6b0c2;
   text-align: center;
   padding: 18px;
+}
+
+.reveal-countdown {
+  position: fixed;
+  inset: 0;
+  z-index: 18;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  text-align: center;
+  background:
+    radial-gradient(circle at center, var(--card-glow), transparent 35%),
+    rgba(5, 7, 11, 0.9);
+}
+
+.reveal-countdown strong {
+  color: var(--accent);
+  font-size: clamp(90px, 32vw, 180px);
+  line-height: 0.9;
 }
