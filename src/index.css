@@ -1,0 +1,114 @@
+﻿:root {
+  font-family: "Inter", "Segoe UI", Arial, sans-serif;
+  color: #f5f7fa;
+  background: #090b10;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(circle at top right, #1a2235 0%, #090b10 45%, #05070b 100%);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.page {
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 20px 16px 32px;
+}
+
+.card {
+  border: 1px solid #262d3c;
+  background: rgba(16, 20, 28, 0.88);
+  border-radius: 18px;
+  padding: 16px;
+}
+
+h1, h2, h3, p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 34px;
+  line-height: 1;
+}
+
+.muted {
+  color: #a6b0c2;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.input {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #2d3444;
+  background: #0d1118;
+  color: #f5f7fa;
+  padding: 12px;
+}
+
+.button {
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button.primary {
+  background: #f4f6fb;
+  color: #090b10;
+}
+
+.button.secondary {
+  background: #141a25;
+  color: #f4f6fb;
+  border: 1px solid #2d3444;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.photo {
+  border: 1px solid #2b3345;
+  border-radius: 12px;
+  padding: 10px;
+  background: #0f1521;
+  min-height: 120px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  border: 1px solid #35405a;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: #101725;
+  color: #dae1f0;
+  cursor: pointer;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+}
