@@ -8,6 +8,9 @@ export default function DevelopedGallery({ photos, revealed, onReact }) {
         {photos.map((p) => (
           <div key={p.id} className="photo stack">
             <p><strong>{p.nickname}</strong> • {p.sourceType}</p>
+            {revealed && p.signedUrl && (
+              <img className="photo-img large" src={p.signedUrl} alt={p.caption || 'Event memory'} />
+            )}
             <p className="muted">{revealed ? (p.caption || 'No caption') : 'Hidden until reveal'}</p>
             <Reactions photo={p} enabled={revealed} onReact={onReact} />
           </div>

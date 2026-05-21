@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase } from '../config/supabase'
 
 export function useAnonymousAuth() {
@@ -6,6 +6,11 @@ export function useAnonymousAuth() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    if (!supabase) {
+      setLoading(false)
+      return
+    }
+
     let mounted = true
     supabase.auth.getSession().then(({ data }) => {
       if (!mounted) return
@@ -25,6 +30,7 @@ export function useAnonymousAuth() {
   }, [])
 
   async function ensureAnonymous() {
+    if (!supabase) throw new Error('Supabase is not configured')
     if (session) return session
     const { data, error } = await supabase.auth.signInAnonymously()
     if (error) throw error
