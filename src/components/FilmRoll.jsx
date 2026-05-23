@@ -1,3 +1,6 @@
+import { Check, Download } from 'lucide-react'
+import { useRef } from 'react'
+
 function formatFileSize(bytes) {
   if (!bytes) return ''
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
@@ -17,10 +20,56 @@ export default function FilmRoll({
   currentUserId,
   onOpenPhoto,
   onRemoveQueuedMoment,
+  selectedPhotoIds = [],
+  onToggleSelect,
+  onSelectAll,
+  onClearSelection,
+  onDownloadSelected,
+  downloadingSelection = false,
 }) {
+  const longPressTimer = useRef(null)
+  const selectedCount = selectedPhotoIds.length
+  const downloadableCount = photos.filter((photo) => photo.signedUrl).length
+  const selectionMode = revealed && selectedCount > 0
+  const selectionHint = revealed && downloadableCount > 0 && !selectionMode
+
+  function startLongPress(photo) {
+    if (!revealed || selectionMode) return
+    window.clearTimeout(longPressTimer.current)
+    longPressTimer.current = window.setTimeout(() => {
+      onToggleSelect?.(photo)
+      longPressTimer.current = null
+    }, 420)
+  }
+
+  function cancelLongPress() {
+    window.clearTimeout(longPressTimer.current)
+    longPressTimer.current = null
+  }
+
   return (
     <section className="film-section stack">
-      <h2>{revealed ? 'Developed Gallery' : 'Mystery Film Roll'}</h2>
+      <div className="film-heading">
+        <h2>{revealed ? 'Developed Gallery' : 'Mystery Film Roll'}</h2>
+        {selectionMode && downloadableCount > 0 && (
+          <button
+            className="selection-link"
+            onClick={selectedCount === downloadableCount ? onClearSelection : onSelectAll}
+          >
+            {selectedCount === downloadableCount ? 'Clear' : 'Select all'}
+          </button>
+        )}
+      </div>
+      {selectionMode && (
+        <div className="selection-bar">
+          <span>{selectedCount} selected</span>
+          <button onClick={onDownloadSelected} disabled={downloadingSelection}>
+            <Download size={16} />
+            {downloadingSelection ? 'Preparing...' : 'Download'}
+          </button>
+        </div>
+      )}
+      {selectionHint && <p className="tiny">Long press a photo to select.</p>}
       <div className="grid">
         {queuedMoments.map((moment) => (
           <button
@@ -37,26 +86,55 @@ export default function FilmRoll({
         {photos.map((p) => {
           const mine = p.userId === currentUserId
           const fileSize = formatFileSize(p.fileSizeBytes)
+          const selected = selectedPhotoIds.includes(p.id)
           return (
-            <div key={p.id} className={`photo ${revealed ? 'developed' : 'developing'}`}>
-              <p><strong>{p.nickname}</strong> / {formatSourceType(p.sourceType)}</p>
+            <div
+              key={p.id}
+              className={`photo ${revealed ? 'developed selectable' : 'developing'} ${selected ? 'selected' : ''} ${selectionMode ? 'selection-mode' : ''}`}
+              onClick={() => {
+                cancelLongPress()
+                if (selectionMode) onToggleSelect?.(p)
+              }}
+              onPointerDown={() => startLongPress(p)}
+              onPointerUp={cancelLongPress}
+              onPointerLeave={cancelLongPress}
+              onPointerCancel={cancelLongPress}
+              onTouchMove={cancelLongPress}
+              onContextMenu={(event) => {
+                if (revealed) event.preventDefault()
+              }}
+            >
               {p.signedUrl && (
                 <img
                   className={`photo-img ${revealed ? '' : 'private-preview'}`}
                   src={p.signedUrl}
-                  alt={p.caption || 'Event memory'}
+                  alt="Event memory"
                 />
               )}
               {!p.signedUrl && <div className="film-placeholder">developing...</div>}
-              <p className="muted" style={{ marginTop: 6 }}>
-                {revealed || mine ? (p.caption || 'No caption') : 'Locked until reveal'}
-              </p>
-              {fileSize && <p className="tiny">{fileSize}</p>}
-              {mine && !revealed && (
-                <button className="chip wide" onClick={() => onOpenPhoto(p)}>
-                  View / Edit
+              {selectionMode && (
+                <button
+                  className="select-check"
+                  aria-label={selected ? 'Deselect photo' : 'Select photo'}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onToggleSelect?.(p)
+                  }}
+                >
+                  {selected && <Check size={15} />}
                 </button>
               )}
+              {fileSize && <p className="tiny">{fileSize}</p>}
+              <div className="moment-footer">
+                <span>
+                  <strong>{p.nickname}</strong> / {formatSourceType(p.sourceType)}
+                </span>
+                {mine && !revealed && (
+                  <button className="moment-action" onClick={() => onOpenPhoto(p)}>
+                    Open
+                  </button>
+                )}
+              </div>
             </div>
           )
         })}

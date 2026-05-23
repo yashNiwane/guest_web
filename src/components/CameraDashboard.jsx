@@ -1,4 +1,5 @@
-﻿import { useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { Camera, Image, Plus } from 'lucide-react'
 
 export default function CameraDashboard({
   shotLimit,
@@ -7,10 +8,12 @@ export default function CameraDashboard({
   revealAt,
   disabled = false,
 }) {
-  const [caption, setCaption] = useState('')
+  const [open, setOpen] = useState(false)
 
   const remaining = shotLimit - takenShots
   const canShoot = remaining > 0 && !disabled
+
+  if (disabled) return null
 
   const revealText = useMemo(() => {
     const diffMs = revealAt.getTime() - Date.now()
@@ -24,48 +27,56 @@ export default function CameraDashboard({
     const selectedFiles = Array.from(e.target.files || [])
     if (selectedFiles.length === 0 || !canShoot) return
     const files = selectedFiles.slice(0, remaining)
-    onAddPhoto({ files, sourceType, caption })
-    setCaption('')
+    onAddPhoto({ files, sourceType })
+    setOpen(false)
     e.target.value = ''
   }
 
   return (
-    <div className="card stack">
-      <h2>Camera Dashboard</h2>
-      <p className="muted">Shots left: {remaining} / Reveal in: {revealText}</p>
-      <p className="muted">
-        Add moments freely. Eve backs them up quietly while you keep shooting.
-      </p>
-      <input
-        className="input"
-        placeholder="Caption (optional)"
-        value={caption}
-        onChange={(e) => setCaption(e.target.value)}
-      />
-      <div className="row">
-        <label className={`button primary ${canShoot ? '' : 'disabled'}`} style={{ textAlign: 'center' }}>
-          Snap Photo
-          <input
-            hidden
-            disabled={!canShoot}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={(e) => handlePick(e, 'guest_camera')}
-          />
-        </label>
-        <label className={`button secondary ${canShoot ? '' : 'disabled'}`} style={{ textAlign: 'center' }}>
-          Choose Gallery
-          <input
-            hidden
-            disabled={!canShoot}
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={(e) => handlePick(e, 'gallery')}
-          />
-        </label>
-      </div>
-    </div>
+    <>
+      <button
+        className={`floating-add ${canShoot ? '' : 'disabled'}`}
+        disabled={!canShoot}
+        onClick={() => setOpen(true)}
+      >
+        <Plus size={22} />
+        Add moment
+      </button>
+
+      {open && (
+        <div className="sheet-backdrop" onClick={() => setOpen(false)}>
+          <div className="bottom-sheet" onClick={(event) => event.stopPropagation()}>
+            <div className="sheet-handle" />
+            <p className="tiny">
+              {remaining} left / {revealText}
+            </p>
+            <label className="sheet-action">
+              <Camera size={22} />
+              Use camera
+              <input
+                hidden
+                disabled={!canShoot}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={(e) => handlePick(e, 'guest_camera')}
+              />
+            </label>
+            <label className="sheet-action">
+              <Image size={22} />
+              Choose from gallery
+              <input
+                hidden
+                disabled={!canShoot}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => handlePick(e, 'gallery')}
+              />
+            </label>
+          </div>
+        </div>
+      )}
+    </>
   )
 }

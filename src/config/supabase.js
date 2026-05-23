@@ -14,3 +14,6 @@ export const supabase = supabaseConfigError
 
 export const photoBucket =
   import.meta.env.VITE_GUEST_PHOTO_BUCKET || 'Event Photos and Videos'
+
+export const coverBucket =
+  import.meta.env.VITE_EVENT_COVER_BUCKET || 'Event Covers'

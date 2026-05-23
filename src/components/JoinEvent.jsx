@@ -1,6 +1,11 @@
 import { useState } from 'react'
 
-export default function JoinEvent({ onJoin, initialEventId = '', busy = false }) {
+export default function JoinEvent({
+  onJoin,
+  initialEventId = '',
+  busy = false,
+  savedProfiles = [],
+}) {
   const [eventLink, setEventLink] = useState(
     initialEventId ? `${window.location.origin}/?event_id=${initialEventId}` : '',
   )
@@ -41,6 +46,28 @@ export default function JoinEvent({ onJoin, initialEventId = '', busy = false })
       >
         {busy ? 'Joining...' : 'Join Event'}
       </button>
+      {savedProfiles.length > 0 && (
+        <div className="saved-guests">
+          <p className="tiny">Saved guests</p>
+          {savedProfiles.slice(0, 4).map((profile) => (
+            <button
+              key={`${profile.eventId}-${profile.userId || profile.nickname}`}
+              className="saved-guest"
+              disabled={busy}
+              onClick={() =>
+                onJoin({
+                  eventLink: '',
+                  nickname: profile.nickname,
+                  eventId: initialEventId || profile.eventId,
+                })
+              }
+            >
+              <strong>{profile.nickname}</strong>
+              <span>{profile.eventId.slice(0, 8)}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

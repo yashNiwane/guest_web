@@ -5,12 +5,11 @@ export function useGuestPhotos({ revealAt }) {
 
   const revealed = useMemo(() => Date.now() >= revealAt.getTime(), [revealAt])
 
-  function addPhoto({ sourceType, caption, path, nickname }) {
+  function addPhoto({ sourceType, path, nickname }) {
     setPhotos((prev) => [
       {
         id: crypto.randomUUID(),
         sourceType,
-        caption,
         path,
         nickname,
         createdAt: new Date().toISOString(),

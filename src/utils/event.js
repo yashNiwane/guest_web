@@ -39,17 +39,21 @@ export function makePhotoStoragePath(eventId, userId, fileName) {
 }
 
 export const guestMemoryKey = 'eve.guest_web.profile'
+export const guestSessionKey = 'eve.guest_web.session'
+export const guestProfilesKey = 'eve.guest_web.profiles'
 
-export function saveGuestMemory({ eventId, nickname }) {
-  window.localStorage.setItem(
-    guestMemoryKey,
-    JSON.stringify({ eventId, nickname, savedAt: Date.now() }),
-  )
+export function saveGuestMemory({ eventId, nickname, userId }) {
+  const profile = { eventId, nickname, userId: userId || '', savedAt: Date.now() }
+  window.sessionStorage.setItem(guestSessionKey, JSON.stringify(profile))
+  window.localStorage.setItem(guestMemoryKey, JSON.stringify(profile))
+  saveGuestProfile(profile)
 }
 
 export function loadGuestMemory() {
   try {
-    const raw = window.localStorage.getItem(guestMemoryKey)
+    const raw =
+      window.sessionStorage.getItem(guestSessionKey) ||
+      window.localStorage.getItem(guestMemoryKey)
     if (!raw) return null
     const parsed = JSON.parse(raw)
     if (!parsed?.eventId || !parsed?.nickname) return null
@@ -60,5 +64,30 @@ export function loadGuestMemory() {
 }
 
 export function clearGuestMemory() {
+  window.sessionStorage.removeItem(guestSessionKey)
   window.localStorage.removeItem(guestMemoryKey)
+}
+
+export function loadGuestProfiles() {
+  try {
+    const raw = window.localStorage.getItem(guestProfilesKey)
+    const parsed = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed.filter((item) => item.eventId && item.nickname) : []
+  } catch {
+    return []
+  }
+}
+
+export function saveGuestProfile(profile) {
+  const profiles = loadGuestProfiles()
+  const next = [
+    profile,
+    ...profiles.filter(
+      (item) =>
+        item.eventId !== profile.eventId ||
+        (profile.userId && item.userId !== profile.userId) ||
+        (!profile.userId && item.nickname !== profile.nickname),
+    ),
+  ].slice(0, 8)
+  window.localStorage.setItem(guestProfilesKey, JSON.stringify(next))
 }
