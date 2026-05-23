@@ -4,17 +4,42 @@ function formatFileSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-export default function FilmRoll({ photos, revealed, currentUserId, onOpenPhoto }) {
+function formatSourceType(sourceType) {
+  if (sourceType === 'guest_camera') return 'Camera'
+  if (sourceType === 'gallery') return 'Gallery'
+  return sourceType || 'Moment'
+}
+
+export default function FilmRoll({
+  photos,
+  queuedMoments = [],
+  revealed,
+  currentUserId,
+  onOpenPhoto,
+  onRemoveQueuedMoment,
+}) {
   return (
-    <div className="card stack">
+    <section className="film-section stack">
       <h2>{revealed ? 'Developed Gallery' : 'Mystery Film Roll'}</h2>
       <div className="grid">
+        {queuedMoments.map((moment) => (
+          <button
+            key={moment.id}
+            className={`photo queued ${moment.failed ? 'failed' : ''}`}
+            onClick={() => moment.failed && onRemoveQueuedMoment?.(moment)}
+          >
+            <img className="photo-img no-margin" src={moment.previewUrl} alt="Queued moment" />
+            <span className="photo-overlay">
+              {moment.failed ? 'Tap to remove' : 'Backing up'}
+            </span>
+          </button>
+        ))}
         {photos.map((p) => {
           const mine = p.userId === currentUserId
           const fileSize = formatFileSize(p.fileSizeBytes)
           return (
             <div key={p.id} className={`photo ${revealed ? 'developed' : 'developing'}`}>
-              <p><strong>{p.nickname}</strong> / {p.sourceType}</p>
+              <p><strong>{p.nickname}</strong> / {formatSourceType(p.sourceType)}</p>
               {p.signedUrl && (
                 <img
                   className={`photo-img ${revealed ? '' : 'private-preview'}`}
@@ -36,7 +61,9 @@ export default function FilmRoll({ photos, revealed, currentUserId, onOpenPhoto 
           )
         })}
       </div>
-      {photos.length === 0 && <p className="muted">No uploads yet.</p>}
-    </div>
+      {photos.length === 0 && queuedMoments.length === 0 && (
+        <p className="muted">No moments yet.</p>
+      )}
+    </section>
   )
 }

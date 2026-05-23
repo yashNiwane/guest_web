@@ -8,9 +8,12 @@ import DevelopedGallery from './components/DevelopedGallery'
 import { photoBucket, supabase, supabaseConfigError } from './config/supabase'
 import { useAnonymousAuth } from './hooks/useAnonymousAuth'
 import {
-  fakeStoragePath,
+  clearGuestMemory,
+  loadGuestMemory,
+  makePhotoStoragePath,
   parseEventIdFromCurrentUrl,
   parseEventIdFromLink,
+  saveGuestMemory,
 } from './utils/event'
 import { compressImage } from './utils/compressImage'
 
@@ -28,14 +31,28 @@ export default function App() {
   )
   const [shotLimit, setShotLimit] = useState(8)
   const [photos, setPhotos] = useState([])
+  const [queuedMoments, setQueuedMoments] = useState([])
   const [busy, setBusy] = useState(false)
-  const [uploadStatus, setUploadStatus] = useState('')
   const [currentUserId, setCurrentUserId] = useState('')
   const [selectedPhoto, setSelectedPhoto] = useState(null)
   const [now, setNow] = useState(Date.now())
   const detectedEventId = useMemo(() => parseEventIdFromCurrentUrl(), [])
 
   const { ensureAnonymous, loading: authLoading } = useAnonymousAuth()
+
+  useEffect(() => {
+    if (supabaseConfigError || authLoading || joined) return
+    const remembered = loadGuestMemory()
+    const resumeEventId = detectedEventId || remembered?.eventId
+    const resumeNickname = remembered?.nickname
+    if (!resumeEventId || !resumeNickname) return
+    handleJoin({
+      eventLink: '',
+      nickname: resumeNickname,
+      eventId: resumeEventId,
+      silent: true,
+    })
+  }, [authLoading, detectedEventId, joined])
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
@@ -67,10 +84,7 @@ export default function App() {
     return revealed ? 'Your film developed' : 'Film is still developing'
   }, [joined, revealed])
 
-  async function loadPhotosForEvent(
-    targetEventId,
-    { shouldSignPhotos, currentUserId = '', currentNickname = '' },
-  ) {
+  async function loadPhotosForEvent(targetEventId, { currentUserId = '', currentNickname = '' }) {
     if (!supabase) return
 
     const { data: photoRows, error: photoError } = await supabase
@@ -84,9 +98,7 @@ export default function App() {
     if (photoError) throw photoError
 
     const reactionCounts = await loadReactionCounts(photoRows || [])
-    const signablePaths = (photoRows || [])
-      .filter((photo) => shouldSignPhotos || photo.user_id === currentUserId)
-      .map((photo) => photo.storage_path)
+    const signablePaths = (photoRows || []).map((photo) => photo.storage_path)
     const signedUrls = await signPhotoUrls(signablePaths)
 
     setPhotos(
@@ -143,10 +155,10 @@ export default function App() {
     )
   }
 
-  async function handleJoin({ eventLink, nickname: nick, eventId: directEventId }) {
+  async function handleJoin({ eventLink, nickname: nick, eventId: directEventId, silent = false }) {
     const parsedEventId = directEventId || parseEventIdFromLink(eventLink)
     if (!parsedEventId || !nick) {
-      alert('Please provide a valid invite link with event_id and nickname.')
+      if (!silent) alert('Please provide a valid invite link with event_id and nickname.')
       return
     }
 
@@ -189,23 +201,37 @@ export default function App() {
       setRevealAt(nextRevealed ? new Date(Date.now() - 1000) : nextRevealAt)
       setShotLimit(eventRow.photo_limit || 8)
       setJoined(true)
+      saveGuestMemory({ eventId: parsedEventId, nickname: nick })
       loadPhotosForEvent(parsedEventId, {
-        shouldSignPhotos: nextRevealed,
         currentUserId: session.user.id,
         currentNickname: nick,
       }).catch((err) => {
         console.error('Joined, but existing photos could not be loaded', err)
       })
     } catch (err) {
-      alert(`Join failed: ${err.message}`)
+      clearGuestMemory()
+      if (!silent) alert(`Join failed: ${err.message}`)
     } finally {
       setBusy(false)
     }
   }
 
+  async function fetchPublicIpAddress() {
+    try {
+      const response = await fetch('https://api.ipify.org/?format=json', {
+        signal: AbortSignal.timeout?.(3000),
+      })
+      if (!response.ok) return null
+      const body = await response.json()
+      return typeof body.ip === 'string' ? body.ip : null
+    } catch {
+      return null
+    }
+  }
+
   async function uploadOnePhoto({ file, sourceType, caption, session }) {
     const uploadFile = await compressImage(file)
-    const path = fakeStoragePath(eventId, uploadFile.name || file.name)
+    const path = makePhotoStoragePath(eventId, session.user.id, uploadFile.name || file.name)
     const { error: uploadError } = await supabase.storage
       .from(photoBucket)
       .upload(path, uploadFile, {
@@ -217,7 +243,7 @@ export default function App() {
       throw new Error(`Storage upload failed: ${uploadError.message}`)
     }
 
-    const { error: insertError } = await supabase.from('photos').insert({
+    const payload = {
       event_id: eventId,
       user_id: session.user.id,
       storage_path: path,
@@ -225,7 +251,11 @@ export default function App() {
       source_type: sourceType,
       nickname_denormalized: nickname,
       file_size_bytes: uploadFile.size,
-    })
+    }
+    const capturedIp = await fetchPublicIpAddress()
+    if (capturedIp) payload.captured_ip = capturedIp
+
+    const { error: insertError } = await supabase.from('photos').insert(payload)
     if (insertError) {
       await supabase.storage.from(photoBucket).remove([path])
       throw new Error(`Photo save failed: ${insertError.message}`)
@@ -235,41 +265,52 @@ export default function App() {
   async function handleAddPhoto({ files, file, sourceType, caption }) {
     if (!supabase || !eventId || revealed) return
     const selectedFiles = files || (file ? [file] : [])
-    const remainingShots = Math.max(shotLimit - photos.length, 0)
+    const remainingShots = Math.max(shotLimit - photos.length - queuedMoments.length, 0)
     const uploadFiles = selectedFiles.slice(0, remainingShots)
     if (uploadFiles.length === 0) return
 
-    setBusy(true)
-    setUploadStatus(
-      uploadFiles.length > 1 ? `Uploading 1 of ${uploadFiles.length}...` : 'Uploading photo...',
-    )
+    uploadFiles.forEach((uploadFile, index) => {
+      const queueItem = {
+        id: crypto.randomUUID(),
+        file: uploadFile,
+        previewUrl: URL.createObjectURL(uploadFile),
+        sourceType,
+        caption: uploadFiles.length === 1 ? caption : '',
+        failed: false,
+      }
+      setQueuedMoments((prev) => [queueItem, ...prev])
+      backupQueuedMoment(queueItem, index)
+    })
+  }
+
+  async function backupQueuedMoment(queueItem) {
     try {
       const session = await ensureAnonymous()
-      for (const [index, uploadFile] of uploadFiles.entries()) {
-        setUploadStatus(
-          uploadFiles.length > 1
-            ? `Uploading ${index + 1} of ${uploadFiles.length}...`
-            : 'Uploading photo...',
-        )
-        await uploadOnePhoto({
-          file: uploadFile,
-          sourceType,
-          caption: uploadFiles.length === 1 ? caption : '',
-          session,
-        })
-      }
-
+      await uploadOnePhoto({
+        file: queueItem.file,
+        sourceType: queueItem.sourceType,
+        caption: queueItem.caption,
+        session,
+      })
+      URL.revokeObjectURL(queueItem.previewUrl)
+      setQueuedMoments((prev) => prev.filter((item) => item.id !== queueItem.id))
       await loadPhotosForEvent(eventId, {
-        shouldSignPhotos: revealed,
         currentUserId: session.user.id,
         currentNickname: nickname,
       })
     } catch (err) {
-      alert(err.message)
-    } finally {
-      setBusy(false)
-      setUploadStatus('')
+      console.error(err)
+      setQueuedMoments((prev) =>
+        prev.map((item) =>
+          item.id === queueItem.id ? { ...item, failed: true, error: err.message } : item,
+        ),
+      )
     }
+  }
+
+  function removeQueuedMoment(queueItem) {
+    URL.revokeObjectURL(queueItem.previewUrl)
+    setQueuedMoments((prev) => prev.filter((item) => item.id !== queueItem.id))
   }
 
   async function react(photoId, key) {
@@ -285,7 +326,6 @@ export default function App() {
         { onConflict: 'photo_id,user_id,reaction' },
       )
       await loadPhotosForEvent(eventId, {
-        shouldSignPhotos: true,
         currentUserId: session.user.id,
         currentNickname: nickname,
       })
@@ -305,7 +345,6 @@ export default function App() {
       if (error) throw new Error(`Caption update failed: ${error.message}`)
       setSelectedPhoto(null)
       await loadPhotosForEvent(eventId, {
-        shouldSignPhotos: revealed,
         currentUserId,
         currentNickname: nickname,
       })
@@ -326,7 +365,6 @@ export default function App() {
       await supabase.storage.from(photoBucket).remove([photo.path])
       setSelectedPhoto(null)
       await loadPhotosForEvent(eventId, {
-        shouldSignPhotos: revealed,
         currentUserId,
         currentNickname: nickname,
       })
@@ -351,10 +389,11 @@ export default function App() {
 
   return (
     <main className={`page stack theme-${eventTheme}`}>
-      <h1>{headerText}</h1>
-      <p className="muted">
-        Guests join by QR, capture the day, and see the album after reveal.
-      </p>
+      <header className="app-header">
+        <p className="eyebrow">Eve guest</p>
+        <h1>{headerText}</h1>
+        <p className="muted">Capture moments now. The gallery unlocks when the host reveals it.</p>
+      </header>
 
       {!joined && (
         <JoinEvent
@@ -366,22 +405,20 @@ export default function App() {
 
       {joined && (
         <>
-          <div className="card stack">
-            <p>
-              <strong>{eventName}</strong>
-            </p>
-            <p>
-              <strong>Nickname:</strong> {nickname}
-            </p>
-            <p className="muted">
-              Anonymous auth: {authLoading ? 'Checking...' : 'Active'}
-            </p>
-            <p className="muted">{uploadStatus || (busy ? 'Syncing film...' : 'Film synced')}</p>
-          </div>
+          <section className="event-hero">
+            <div>
+              <p className="eyebrow">{nickname}</p>
+              <h2>{eventName}</h2>
+            </div>
+            <div className="hero-stat">
+              <strong>{photos.length + queuedMoments.length}</strong>
+              <span>moments</span>
+            </div>
+          </section>
 
           <CameraDashboard
             shotLimit={shotLimit}
-            takenShots={photos.length}
+            takenShots={photos.length + queuedMoments.length}
             onAddPhoto={handleAddPhoto}
             revealAt={revealAt}
             disabled={busy || revealed}
@@ -391,9 +428,11 @@ export default function App() {
 
           <FilmRoll
             photos={photos}
+            queuedMoments={queuedMoments}
             revealed={revealed}
             currentUserId={currentUserId}
             onOpenPhoto={setSelectedPhoto}
+            onRemoveQueuedMoment={removeQueuedMoment}
           />
           <DevelopedGallery photos={photos} revealed={revealed} onReact={react} />
         </>

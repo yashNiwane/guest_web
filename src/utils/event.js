@@ -30,10 +30,35 @@ export function parseEventIdFromCurrentUrl() {
   }
 }
 
-export function fakeStoragePath(eventId, fileName) {
+export function makePhotoStoragePath(eventId, userId, fileName) {
   const safeName = fileName
     .toLowerCase()
     .replace(/[^a-z0-9._-]+/g, '-')
     .replace(/^-+|-+$/g, '')
-  return `${eventId}/${Date.now()}-${safeName || 'photo.jpg'}`
+  return `${eventId}/${userId}/${Date.now()}-${safeName || 'photo.jpg'}`
+}
+
+export const guestMemoryKey = 'eve.guest_web.profile'
+
+export function saveGuestMemory({ eventId, nickname }) {
+  window.localStorage.setItem(
+    guestMemoryKey,
+    JSON.stringify({ eventId, nickname, savedAt: Date.now() }),
+  )
+}
+
+export function loadGuestMemory() {
+  try {
+    const raw = window.localStorage.getItem(guestMemoryKey)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed?.eventId || !parsed?.nickname) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+export function clearGuestMemory() {
+  window.localStorage.removeItem(guestMemoryKey)
 }

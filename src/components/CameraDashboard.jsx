@@ -34,8 +34,7 @@ export default function CameraDashboard({
       <h2>Camera Dashboard</h2>
       <p className="muted">Shots left: {remaining} / Reveal in: {revealText}</p>
       <p className="muted">
-        Snap opens the camera for one shot. Choose Gallery can upload several photos at once.
-        Images are compressed before upload so slow networks feel less cursed.
+        Add moments freely. Eve backs them up quietly while you keep shooting.
       </p>
       <input
         className="input"
@@ -52,7 +51,7 @@ export default function CameraDashboard({
             type="file"
             accept="image/*"
             capture="environment"
-            onChange={(e) => handlePick(e, 'camera')}
+            onChange={(e) => handlePick(e, 'guest_camera')}
           />
         </label>
         <label className={`button secondary ${canShoot ? '' : 'disabled'}`} style={{ textAlign: 'center' }}>
