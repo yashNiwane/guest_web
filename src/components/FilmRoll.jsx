@@ -1,5 +1,5 @@
-import { Check, Download } from 'lucide-react'
-import { useRef } from 'react'
+import { Check, Download, X } from 'lucide-react'
+import { useRef, useState } from 'react'
 
 function formatFileSize(bytes) {
   if (!bytes) return ''
@@ -28,6 +28,8 @@ export default function FilmRoll({
   downloadingSelection = false,
 }) {
   const longPressTimer = useRef(null)
+  const longPressTriggered = useRef(false)
+  const [pressingPhotoId, setPressingPhotoId] = useState('')
   const selectedCount = selectedPhotoIds.length
   const downloadableCount = photos.filter((photo) => photo.signedUrl).length
   const selectionMode = revealed && selectedCount > 0
@@ -36,15 +38,32 @@ export default function FilmRoll({
   function startLongPress(photo) {
     if (!revealed || selectionMode) return
     window.clearTimeout(longPressTimer.current)
+    longPressTriggered.current = false
+    setPressingPhotoId(photo.id)
     longPressTimer.current = window.setTimeout(() => {
+      longPressTriggered.current = true
       onToggleSelect?.(photo)
+      setPressingPhotoId('')
       longPressTimer.current = null
     }, 420)
   }
 
   function cancelLongPress() {
     window.clearTimeout(longPressTimer.current)
+    setPressingPhotoId('')
     longPressTimer.current = null
+  }
+
+  function handlePhotoClick(photo) {
+    const wasLongPress = longPressTriggered.current
+    longPressTriggered.current = false
+    cancelLongPress()
+    if (wasLongPress) return
+    if (selectionMode) {
+      onToggleSelect?.(photo)
+      return
+    }
+    onOpenPhoto?.(photo)
   }
 
   return (
@@ -62,6 +81,9 @@ export default function FilmRoll({
       </div>
       {selectionMode && (
         <div className="selection-bar">
+          <button className="selection-close" aria-label="Clear selection" onClick={onClearSelection}>
+            <X size={16} />
+          </button>
           <span>{selectedCount} selected</span>
           <button onClick={onDownloadSelected} disabled={downloadingSelection}>
             <Download size={16} />
@@ -87,14 +109,12 @@ export default function FilmRoll({
           const mine = p.userId === currentUserId
           const fileSize = formatFileSize(p.fileSizeBytes)
           const selected = selectedPhotoIds.includes(p.id)
+          const pressing = pressingPhotoId === p.id
           return (
             <div
               key={p.id}
-              className={`photo ${revealed ? 'developed selectable' : 'developing'} ${selected ? 'selected' : ''} ${selectionMode ? 'selection-mode' : ''}`}
-              onClick={() => {
-                cancelLongPress()
-                if (selectionMode) onToggleSelect?.(p)
-              }}
+              className={`photo ${revealed ? 'developed selectable' : 'developing'} ${selected ? 'selected' : ''} ${selectionMode ? 'selection-mode' : ''} ${pressing ? 'pressing' : ''}`}
+              onClick={() => handlePhotoClick(p)}
               onPointerDown={() => startLongPress(p)}
               onPointerUp={cancelLongPress}
               onPointerLeave={cancelLongPress}
@@ -130,7 +150,13 @@ export default function FilmRoll({
                   <strong>{p.nickname}</strong> / {formatSourceType(p.sourceType)}
                 </span>
                 {mine && !revealed && (
-                  <button className="moment-action" onClick={() => onOpenPhoto(p)}>
+                  <button
+                    className="moment-action"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onOpenPhoto(p)
+                    }}
+                  >
                     Open
                   </button>
                 )}
